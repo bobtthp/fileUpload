@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>File Upload with Resume</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f9f9f9;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+        }
+
+        .container {
+            max-width: 400px;
+            width: 100%;
+            background-color: #ffffff;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+        }
+
+        h1 {
+            font-size: 1.5em;
+            color: #333333;
+            margin-bottom: 20px;
+        }
+
+        input[type="file"] {
+            display: none;
+        }
+
+        .file-label {
+            display: inline-block;
+            padding: 10px 20px;
+            color: #007bff;
+            background-color: #e9f5ff;
+            border: 1px solid #007bff;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            margin-bottom: 15px;
+        }
+
+        .file-label:hover {
+            background-color: #d0ebff;
+        }
+
+        button {
+            padding: 10px 20px;
+            color: #fff;
+            background-color: #28a745;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 1em;
+            transition: background-color 0.2s ease;
+        }
+
+        button:hover {
+            background-color: #218838;
+        }
+
+        #progressContainer {
+            margin-top: 15px;
+            display: none;
+        }
+
+        #progressBar {
+            width: 100%;
+            height: 20px;
+            background-color: #e0e0e0;
+            border-radius: 10px;
+            overflow: hidden;
+            margin-bottom: 10px;
+        }
+
+        #progressFill {
+            height: 100%;
+            width: 0;
+            background-color: #007bff;
+            transition: width 0.2s ease;
+        }
+
+        #progressText {
+            font-size: 0.9em;
+            color: #555;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>File Upload</h1>
+    <label class="file-label" for="fileInput">Select File</label>
+    <input type="file" id="fileInput">
+    <button id="uploadButton">Upload</button>
+
+    <!-- 进度条 -->
+    <div id="progressContainer">
+        <div id="progressBar">
+            <div id="progressFill"></div>
+        </div>
+        <div id="progressText">0%</div>
+    </div>
+</div>
+
+<script>
+    const chunkSize = 100 * 1024 * 1024; // 100MB 每个块的大小
+    let file = null;
+    let uploadedBytes = 0;
+
+    document.getElementById('fileInput').addEventListener('change', (event) => {
+        file = event.target.files[0];
+        document.querySelector('.file-label').innerText = file.name;
+    });
+
+    document.getElementById('uploadButton').addEventListener('click', async () => {
+        if (!file) {
+            alert("Please select a file first.");
+            return;
+        }
+
+        uploadedBytes = await getUploadedBytes(file.name);
+        document.getElementById('progressContainer').style.display = 'block';
+
+        while (uploadedBytes < file.size) {
+            const chunk = file.slice(uploadedBytes, uploadedBytes + chunkSize);
+            const formData = new FormData();
+            formData.append("file", chunk);
+            formData.append("fileName", file.name);
+            formData.append("offset", uploadedBytes);
+
+            const response = await fetch("/upload", {
+                method: "POST",
+                body: formData
+            });
+
+            if (response.ok) {
+                uploadedBytes += chunk.size;
+                const progress = Math.floor((uploadedBytes / file.size) * 100);
+                document.getElementById('progressFill').style.width = `${progress}%`;
+                document.getElementById('progressText').innerText = `${progress}% uploaded`;
+            } else {
+                console.error("Upload failed, retrying...");
+                break;
+            }
+        }
+
+        if (uploadedBytes >= file.size) {
+            await moveFile(file.name); // 调用移动文件的函数
+            alert("File uploaded successfully!");
+        }
+    });
+
+    async function getUploadedBytes(fileName) {
+        const response = await fetch(`/upload/progress?fileName=${fileName}`);
+        if (response.ok) {
+            const data = await response.json();
+            return data.uploadedBytes || 0;
+        }
+        return 0;
+    }
+
+    async function moveFile(fileName) {
+        try {
+            const response = await fetch(`/move-file`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({ fileName })
+            });
+
+            if (response.ok) {
+                alert("File moved successfully!");
+            } else {
+                alert("Failed to move file.");
+                console.error("Error moving file:", response.statusText);
+            }
+        } catch (error) {
+            console.error("Error moving file:", error);
+        }
+    }
+</script>
+</body>
+</html>
