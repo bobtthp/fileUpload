@@ -3,7 +3,9 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/gorilla/websocket"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"os/exec"
@@ -15,6 +17,34 @@ const uploadDir = "/tmp"
 
 type MoveFileRequest struct {
 	FileName string `json:"fileName"`
+}
+
+// 定义一个客户端结构体
+type Client struct {
+	conn *websocket.Conn
+	send chan []byte
+}
+
+// WebSocket 连接的升级器
+var upgrader = websocket.Upgrader{
+	CheckOrigin: func(r *http.Request) bool {
+		return true
+	},
+}
+
+// 存储连接的客户端
+var clients = make(map[*Client]bool)
+
+// 广播消息给所有连接的客户端
+func broadcastMessage(message []byte) {
+	for client := range clients {
+		select {
+		case client.send <- message:
+		default:
+			close(client.send)
+			delete(clients, client)
+		}
+	}
 }
 
 func main() {
@@ -120,6 +150,42 @@ func main() {
 		w.Write([]byte(fmt.Sprintf(`{"uploadedBytes": %d}`, uploadedBytes)))
 	})
 	http.Handle("/", http.FileServer(http.Dir("./html"))) // 提供静态文件服务
+
+	http.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
+		// 升级 HTTP 请求为 WebSocket 连接
+		conn, err := upgrader.Upgrade(w, r, nil)
+		if err != nil {
+			log.Println(err)
+			return
+		}
+		defer conn.Close()
+
+		client := &Client{conn: conn, send: make(chan []byte)}
+		clients[client] = true
+		defer delete(clients, client)
+
+		// 启动一个 goroutine 来处理客户端的消息发送
+		go func() {
+			for message := range client.send {
+				err := conn.WriteMessage(websocket.TextMessage, message)
+				if err != nil {
+					log.Println(err)
+					return
+				}
+			}
+		}()
+
+		// 接收消息并广播
+		for {
+			_, message, err := conn.ReadMessage()
+			if err != nil {
+				log.Println(err)
+				return
+			}
+			// 广播接收到的消息
+			broadcastMessage(message)
+		}
+	})
 
 	fmt.Println("Starting server on :3000")
 	http.ListenAndServe(":3000", nil)

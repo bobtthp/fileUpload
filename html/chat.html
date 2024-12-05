@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>实时聊天</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      font-family: 'Arial', sans-serif;
+      background: linear-gradient(135deg, #f3f4f6, #e6e8eb);
+      height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+    .chat-container {
+      width: 100%;
+      max-width: 450px;
+      background-color: #fff;
+      border-radius: 12px;
+      box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+      display: flex;
+      flex-direction: column;
+      height: 80%;
+      overflow: hidden;
+    }
+    .messages {
+      flex: 1;
+      padding: 20px;
+      overflow-y: auto;
+      max-height: 500px;
+      background: #f9f9f9;
+      border-bottom: 2px solid #eee;
+      display: flex;
+      flex-direction: column;
+    }
+    .message {
+      margin-bottom: 12px;
+      padding: 12px;
+      background-color: #e0f7fa;
+      border-radius: 10px;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+      max-width: 70%;
+    }
+    .message.client {
+      background-color: #f0f4f8;
+      align-self: flex-end;
+      border-radius: 10px 10px 0 10px; /* 客户端消息右上角更圆滑 */
+    }
+    .message.server {
+      background-color: #e0f7fa;
+      align-self: flex-start;
+      border-radius: 10px 10px 10px 0; /* 服务器消息左上角更圆滑 */
+    }
+    .input-container {
+      display: flex;
+      padding: 16px;
+      background-color: #f1f1f1;
+      border-top: 2px solid #ddd;
+    }
+    input[type="text"] {
+      flex: 1;
+      padding: 12px;
+      border: 2px solid #ddd;
+      border-radius: 25px;
+      font-size: 16px;
+      outline: none;
+      transition: border-color 0.3s;
+    }
+    input[type="text"]:focus {
+      border-color: #4CAF50;
+    }
+    button {
+      padding: 12px 18px;
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 25px;
+      cursor: pointer;
+      font-size: 16px;
+      margin-left: 12px;
+      transition: background-color 0.3s;
+    }
+    button:hover {
+      background-color: #45a049;
+    }
+    button:disabled {
+      background-color: #d3d3d3;
+      cursor: not-allowed;
+    }
+    .scrollbar {
+      scrollbar-width: thin;
+      scrollbar-color: #888 #f1f1f1;
+    }
+    .scrollbar::-webkit-scrollbar {
+      width: 8px;
+    }
+    .scrollbar::-webkit-scrollbar-thumb {
+      background-color: #888;
+      border-radius: 10px;
+    }
+    .scrollbar::-webkit-scrollbar-track {
+      background-color: #f1f1f1;
+      border-radius: 10px;
+    }
+  </style>
+</head>
+<body>
+<div class="chat-container">
+  <div class="messages scrollbar" id="messages">
+    <!-- 消息显示区 -->
+  </div>
+  <div class="input-container">
+    <input type="text" id="messageInput" placeholder="输入消息..." />
+    <button id="sendBtn" onclick="sendMessage()">发送</button>
+  </div>
+</div>
+
+<script>
+  const socket = new WebSocket('ws://10.1.1.120/ws');
+  socket.onopen = function() {
+    console.log("连接成功！");
+  };
+
+  socket.onmessage = function(event) {
+    const message = event.data;
+    const messageContainer = document.createElement('div');
+    messageContainer.classList.add('message');
+    messageContainer.classList.add('server');
+    messageContainer.textContent = message;
+    document.getElementById('messages').appendChild(messageContainer);
+    document.getElementById('messages').scrollTop = document.getElementById('messages').scrollHeight;
+  };
+
+  socket.onerror = function(error) {
+    console.error("WebSocket 错误: ", error);
+  };
+
+  socket.onclose = function() {
+    console.log("连接关闭");
+  };
+
+  function sendMessage() {
+    const input = document.getElementById('messageInput');
+    const messageText = input.value.trim();
+    if (messageText !== '') {
+      socket.send(messageText);
+      const messageContainer = document.createElement('div');
+      messageContainer.classList.add('message');
+      messageContainer.classList.add('client');
+      messageContainer.textContent = "你: " + messageText;
+      document.getElementById('messages').appendChild(messageContainer);
+      document.getElementById('messages').scrollTop = document.getElementById('messages').scrollHeight;
+      input.value = '';
+    }
+  }
+
+  // 禁用空消息发送按钮
+  document.getElementById('messageInput').addEventListener('input', function() {
+    const btn = document.getElementById('sendBtn');
+    btn.disabled = !this.value.trim();
+  });
+</script>
+</body>
+</html>
